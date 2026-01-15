@@ -1,0 +1,25 @@
+[project]
+name = "panda-didgital"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "aiogram>=3.22.0",
+    "alembic>=1.16.5",
+    "apscheduler>=3.11.0",
+    "asyncpg>=0.30.0",
+    "boto3>=1.40.46",
+    "django>=5.2.7",
+    "django-jazzmin>=3.0.1",
+    "environs>=14.3.0",
+    "limited-aiogram>=1.0.2",
+    "openai>=2.8.1",
+    "openpyxl>=3.1.5",
+    "pandas>=2.3.3",
+    "pillow>=11.3.0",
+    "psycopg>=3.2.10",
+    "redis>=6.4.0",
+    "replicate>=1.0.7",
+    "sqlalchemy>=2.0.43",
+]

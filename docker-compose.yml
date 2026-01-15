@@ -1,0 +1,65 @@
+name: auto-bot
+
+
+services:
+  db:
+    image: postgres:15
+    env_file:
+      - .env
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7
+    entrypoint: redis-server --requirepass ${REDIS_PASSWORD}
+    env_file:
+      - .env
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - redis_data:/data
+
+  bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    entrypoint: ["./start.sh", "bot"]
+    env_file:
+      - .env
+    environment:
+      - PYTHONPATH=/app
+    volumes:
+      - media:/app/media
+    depends_on:
+      - db
+      - redis
+
+  admin-panel:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    entrypoint: ["./start.sh", "admin_panel"]
+    env_file:
+      - .env
+    environment:
+      - PYTHONPATH=/app
+    volumes:
+      - media:/app/media
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      - db
+      - redis
+      - bot
+
+volumes:
+  postgres_data:
+  redis_data:
+  media:
