@@ -187,6 +187,13 @@ class ThreadORM:
                     return new_thread
                 
                 return None
+            except IntegrityError:
+                # Дубликат - топик уже создан другим запросом, получаем его
+                await session.rollback()
+                logger.info(f"[ThreadORM] Топик для {user_id} уже существует (IntegrityError), получаем...")
+                query = select(UserThread).filter(UserThread.user_id == user_id)
+                result = await session.execute(query)
+                return result.scalar_one_or_none()
             except Exception as e:
                 await session.rollback()
                 logger.error(f"[DB] Ошибка при работе с топиком для пользователя {user_id}: {e}")

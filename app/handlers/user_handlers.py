@@ -110,27 +110,46 @@ async def process_user_message(message: Message, bot: Bot, album: list[Message] 
         thread = await ThreadORM.get_or_create_thread(user_id, user_name)
         
         if not thread:
-            topic_name = f"@{user_name} (ID: {user_id})"
+            # Используем Redis lock для предотвращения создания дубликатов
+            lock_key = f"create_topic:{user_id}"
+            lock = await redis.get(lock_key)
             
-            forum_topic = await bot.create_forum_topic(
-                chat_id=TG_MESSAGE_GROUP_ID,
-                name=topic_name
-            )
-            
-            thread = await ThreadORM.get_or_create_thread(
-                user_id=user_id,
-                user_name=user_name,
-                thread_id=forum_topic.message_thread_id
-            )
-            
-            await bot.send_message(
-                chat_id=TG_MESSAGE_GROUP_ID,
-                message_thread_id=thread.thread_id,
-                text=f"🆕 Новое обращение от пользователя:\n"
-                     f"👤 Username: @{user_name}\n"
-                     f"🆔 User ID: {user_id}\n"
-                     f"📅 Время: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
-            )
+            if lock:
+                # Другой запрос уже создаёт топик, ждём
+                await asyncio.sleep(1)
+                thread = await ThreadORM.get_or_create_thread(user_id, user_name)
+            else:
+                # Устанавливаем блокировку
+                await redis.set(lock_key, "1", ex=10)
+                
+                try:
+                    # Ещё раз проверяем после получения блокировки
+                    thread = await ThreadORM.get_or_create_thread(user_id, user_name)
+                    
+                    if not thread:
+                        topic_name = f"@{user_name} (ID: {user_id})"
+                        
+                        forum_topic = await bot.create_forum_topic(
+                            chat_id=TG_MESSAGE_GROUP_ID,
+                            name=topic_name
+                        )
+                        
+                        thread = await ThreadORM.get_or_create_thread(
+                            user_id=user_id,
+                            user_name=user_name,
+                            thread_id=forum_topic.message_thread_id
+                        )
+                        
+                        await bot.send_message(
+                            chat_id=TG_MESSAGE_GROUP_ID,
+                            message_thread_id=thread.thread_id,
+                            text=f"🆕 Новое обращение от пользователя:\n"
+                                 f"👤 Username: @{user_name}\n"
+                                 f"🆔 User ID: {user_id}\n"
+                                 f"📅 Время: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+                        )
+                finally:
+                    await redis.delete(lock_key)
         
         # Пересылаем сообщения (сохраняет информацию об отправителе)
         if album:
