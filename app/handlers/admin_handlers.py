@@ -136,6 +136,42 @@ def extract_forward_user_id(message: Message) -> int | None:
     return None
 
 
+def extract_sender_info(message: Message) -> str | None:
+    """Извлекает информацию об отправителе (имя, username) из пересланного сообщения"""
+    if not message.forward_origin:
+        return None
+    
+    origin = message.forward_origin
+    
+    # Пересылка от пользователя
+    if hasattr(origin, 'sender_user') and origin.sender_user:
+        user = origin.sender_user
+        parts = []
+        
+        # Имя
+        name = user.first_name or ""
+        if user.last_name:
+            name += f" {user.last_name}"
+        if name:
+            parts.append(name)
+        
+        # Username
+        if user.username:
+            parts.append(f"@{user.username}")
+            parts.append(f"https://t.me/{user.username}")
+        
+        return " ".join(parts) if parts else None
+    
+    # Пересылка из чата
+    if hasattr(origin, 'sender_chat') and origin.sender_chat:
+        chat = origin.sender_chat
+        if chat.username:
+            return f"{chat.title or ''} @{chat.username}"
+        return chat.title
+    
+    return None
+
+
 from aiogram.filters import Command
 
 @router.message(Command("cancel"), F.chat.type == "private", F.from_user.id.in_(ADMIN_IDS))
@@ -186,7 +222,12 @@ async def process_admin_media(message: Message, bot: Bot, state: FSMContext, alb
             # Проверяем, возможно это пересланный пост с текстом
             if message.forward_origin:
                 forward_user_id = extract_forward_user_id(message)
-                await state.update_data(pending_text=message.text, forward_user_id=forward_user_id)
+                sender_info = extract_sender_info(message)
+                await state.update_data(
+                    pending_text=message.text, 
+                    forward_user_id=forward_user_id,
+                    sender_info=sender_info
+                )
                 await message.answer("📝 Текст сохранён. Теперь пришли медиа (фото/видео) для объявления.")
             else:
                 await message.answer("📷 Пришли медиа (фото/видео) с описанием для создания объявления")
@@ -198,11 +239,13 @@ async def process_admin_media(message: Message, bot: Bot, state: FSMContext, alb
         media_file_ids = []
         original_text = ""
         forward_user_id = None
+        sender_info = None  # Информация об отправителе для GPT
         
         # Получаем сохранённый текст из состояния (если был пересланный текст)
         state_data = await state.get_data()
         pending_text = state_data.get("pending_text", "")
         saved_forward_user_id = state_data.get("forward_user_id")
+        saved_sender_info = state_data.get("sender_info")
         
         if album:
             for msg in album:
@@ -213,22 +256,26 @@ async def process_admin_media(message: Message, bot: Bot, state: FSMContext, alb
                 # Собираем текст из caption или text пересланных сообщений
                 if not original_text:
                     original_text = msg.caption or msg.text or ""
-                # Извлекаем ID пользователя из пересылки
+                # Извлекаем информацию из пересылки
                 if not forward_user_id and msg.forward_origin:
                     forward_user_id = extract_forward_user_id(msg)
+                    sender_info = extract_sender_info(msg)
         else:
             if message.photo:
                 media_file_ids.append({"type": "photo", "file_id": message.photo[-1].file_id})
             elif message.video:
                 media_file_ids.append({"type": "video", "file_id": message.video.file_id})
             original_text = message.caption or message.text or ""
-            # Извлекаем ID пользователя из пересылки
+            # Извлекаем информацию из пересылки
             if message.forward_origin:
                 forward_user_id = extract_forward_user_id(message)
+                sender_info = extract_sender_info(message)
         
         # Если forward_user_id не найден в медиа, используем сохранённый
         if not forward_user_id and saved_forward_user_id:
             forward_user_id = saved_forward_user_id
+        if not sender_info and saved_sender_info:
+            sender_info = saved_sender_info
         
         # Если текст не найден в медиа, используем сохранённый
         if not original_text and pending_text:
@@ -238,13 +285,13 @@ async def process_admin_media(message: Message, bot: Bot, state: FSMContext, alb
         if not original_text:
             # Сохраняем медиа и просим ввести текст
             await state.set_state(AdminPostStates.waiting_for_text)
-            await state.update_data(pending_media=media_file_ids, forward_user_id=forward_user_id)
+            await state.update_data(pending_media=media_file_ids, forward_user_id=forward_user_id, sender_info=sender_info)
             await message.answer(
                 "📝 Медиа получено! Теперь отправь или перешли текст объявления."
             )
             return
         
-        generated_text = await generate_post_text(original_text)
+        generated_text = await generate_post_text(original_text, sender_info=sender_info)
         
         # user_id - пользователь из пересылки, или админ если пересылки нет
         post_user_id = forward_user_id or message.from_user.id
@@ -297,26 +344,31 @@ async def process_pending_text(message: Message, bot: Bot, state: FSMContext):
         data = await state.get_data()
         media_file_ids = data.get("pending_media", [])
         saved_forward_user_id = data.get("forward_user_id")
+        saved_sender_info = data.get("sender_info")
         
         if not media_file_ids:
             await state.clear()
             await message.answer("❌ Медиа не найдено. Начни заново — отправь фото/видео.")
             return
         
-        # Извлекаем ID пользователя из пересылки текста
+        # Извлекаем информацию из пересылки текста
         forward_user_id = None
+        sender_info = None
         if message.forward_origin:
             forward_user_id = extract_forward_user_id(message)
+            sender_info = extract_sender_info(message)
         
-        # Используем сохранённый forward_user_id если не нашли в текущем сообщении
+        # Используем сохранённые данные если не нашли в текущем сообщении
         if not forward_user_id:
             forward_user_id = saved_forward_user_id
+        if not sender_info:
+            sender_info = saved_sender_info
         
         # user_id - пользователь из пересылки, или админ если пересылки нет
         post_user_id = forward_user_id or message.from_user.id
         
-        # Генерируем текст через GPT
-        generated_text = await generate_post_text(original_text)
+        # Генерируем текст через GPT с информацией об отправителе
+        generated_text = await generate_post_text(original_text, sender_info=sender_info)
         
         # Сохраняем данные
         await state.set_state(None)
