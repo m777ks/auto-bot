@@ -1,6 +1,8 @@
 from django.contrib import admin
 from django.utils.html import format_html
 from django.utils.safestring import mark_safe
+from django.urls import reverse
+from urllib.parse import urlencode
 from .models import Users, UserPosts, UserThread, Logger
 
 
@@ -153,13 +155,77 @@ class UserPostsAdmin(admin.ModelAdmin):
     media_count.short_description = 'Медиа'
     
     def post_media_preview(self, obj):
-        if obj.post_media_list:
-            items = []
-            for key in obj.post_media_list:
-                items.append(f'<li><code>{key}</code></li>')
-            return mark_safe(f'<ul>{"".join(items)}</ul>')
-        return '-'
-    post_media_preview.short_description = 'Список медиа'
+        """Превью медиафайлов с presigned URL"""
+        if not obj.post_media_list:
+            return '-'
+        
+        html_parts = ['<div style="display: flex; flex-wrap: wrap; gap: 10px;">']
+        
+        for i, key in enumerate(obj.post_media_list, 1):
+            # Определяем тип файла по расширению
+            ext = key.lower().split('.')[-1] if '.' in key else ''
+            filename = key.split('/')[-1]
+            
+            # Генерируем URL для presigned через view
+            preview_url = f"/s3-preview/?{urlencode({'key': key})}"
+            
+            if ext in ['jpg', 'jpeg', 'png', 'gif', 'webp']:
+                # Изображение — показываем превью
+                html_parts.append(f'''
+                    <div style="text-align: center;">
+                        <a href="{preview_url}" target="_blank">
+                            <img src="{preview_url}" 
+                                 style="max-width: 150px; max-height: 150px; border-radius: 8px; 
+                                        box-shadow: 0 2px 4px rgba(0,0,0,0.2); cursor: pointer;"
+                                 loading="lazy"
+                                 onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
+                            <div style="display: none; width: 150px; height: 100px; background: #444; 
+                                        border-radius: 8px; align-items: center; justify-content: center;">
+                                <span style="font-size: 30px;">🖼️</span>
+                            </div>
+                        </a>
+                        <div style="font-size: 10px; color: #888; margin-top: 4px; max-width: 150px; 
+                                    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                            {filename}
+                        </div>
+                    </div>
+                ''')
+            elif ext in ['mp4', 'mov', 'avi', 'webm']:
+                # Видео — иконка со ссылкой
+                html_parts.append(f'''
+                    <div style="text-align: center;">
+                        <a href="{preview_url}" target="_blank" style="text-decoration: none;">
+                            <div style="width: 150px; height: 100px; background: #333; border-radius: 8px;
+                                        display: flex; align-items: center; justify-content: center;
+                                        box-shadow: 0 2px 4px rgba(0,0,0,0.2);">
+                                <span style="font-size: 40px;">🎬</span>
+                            </div>
+                        </a>
+                        <div style="font-size: 10px; color: #888; margin-top: 4px; max-width: 150px; 
+                                    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                            {filename}
+                        </div>
+                    </div>
+                ''')
+            else:
+                # Другой файл
+                html_parts.append(f'''
+                    <div style="text-align: center;">
+                        <a href="{preview_url}" target="_blank" style="text-decoration: none;">
+                            <div style="width: 100px; height: 60px; background: #555; border-radius: 8px;
+                                        display: flex; align-items: center; justify-content: center;">
+                                <span style="font-size: 24px;">📎</span>
+                            </div>
+                        </a>
+                        <div style="font-size: 10px; color: #888; margin-top: 4px;">
+                            {filename}
+                        </div>
+                    </div>
+                ''')
+        
+        html_parts.append('</div>')
+        return mark_safe(''.join(html_parts))
+    post_media_preview.short_description = 'Превью медиа'
 
 
 @admin.register(UserThread)
