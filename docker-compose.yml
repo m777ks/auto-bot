@@ -9,8 +9,7 @@ services:
       - .env
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "127.0.0.1:5433:5432"
+    # Порт не пробрасываем наружу - только внутри Docker сети
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 5s
@@ -23,8 +22,7 @@ services:
     entrypoint: redis-server --requirepass ${REDIS_PASSWORD}
     env_file:
       - .env
-    ports:
-      - "127.0.0.1:6380:6379"
+    # Порт не пробрасываем наружу - только внутри Docker сети
     volumes:
       - redis_data:/data
 
