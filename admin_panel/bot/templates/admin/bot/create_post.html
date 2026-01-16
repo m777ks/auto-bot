@@ -1,0 +1,327 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block title %}Создать пост{% endblock %}
+
+{% block content %}
+<style>
+    .create-post-form {
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 20px;
+    }
+    .form-group {
+        margin-bottom: 20px;
+    }
+    .form-group label {
+        display: block;
+        margin-bottom: 8px;
+        font-weight: 600;
+        color: #ccc;
+    }
+    .form-group textarea,
+    .form-group input[type="text"],
+    .form-group input[type="number"] {
+        width: 100%;
+        padding: 12px;
+        border: 1px solid #444;
+        border-radius: 6px;
+        background: #2a2a2a;
+        color: #fff;
+        font-size: 14px;
+        box-sizing: border-box;
+    }
+    .form-group textarea {
+        min-height: 200px;
+        resize: vertical;
+        font-family: monospace;
+    }
+    .form-group textarea:focus,
+    .form-group input:focus {
+        outline: none;
+        border-color: #4a9eff;
+    }
+    .file-upload {
+        border: 2px dashed #444;
+        border-radius: 8px;
+        padding: 30px;
+        text-align: center;
+        cursor: pointer;
+        transition: all 0.3s;
+        background: #2a2a2a;
+    }
+    .file-upload:hover {
+        border-color: #4a9eff;
+        background: #333;
+    }
+    .file-upload.dragover {
+        border-color: #4a9eff;
+        background: #333;
+    }
+    .file-upload input[type="file"] {
+        display: none;
+    }
+    .file-upload-text {
+        color: #888;
+        font-size: 14px;
+    }
+    .file-upload-icon {
+        font-size: 48px;
+        margin-bottom: 10px;
+    }
+    .preview-container {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 15px;
+    }
+    .preview-item {
+        position: relative;
+        width: 100px;
+        height: 100px;
+        border-radius: 8px;
+        overflow: hidden;
+        background: #333;
+    }
+    .preview-item img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+    .preview-item .remove-btn {
+        position: absolute;
+        top: 4px;
+        right: 4px;
+        width: 24px;
+        height: 24px;
+        background: rgba(220, 53, 69, 0.9);
+        border: none;
+        border-radius: 50%;
+        color: white;
+        cursor: pointer;
+        font-size: 14px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .preview-item .file-icon {
+        width: 100%;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 32px;
+    }
+    .submit-btn {
+        background: linear-gradient(135deg, #28a745, #20c997);
+        color: white;
+        border: none;
+        padding: 14px 40px;
+        font-size: 16px;
+        font-weight: 600;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: all 0.3s;
+        margin-right: 10px;
+    }
+    .submit-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(40, 167, 69, 0.4);
+    }
+    .cancel-btn {
+        background: #6c757d;
+        color: white;
+        border: none;
+        padding: 14px 30px;
+        font-size: 16px;
+        border-radius: 8px;
+        cursor: pointer;
+        text-decoration: none;
+    }
+    .cancel-btn:hover {
+        background: #5a6268;
+    }
+    .buttons-row {
+        margin-top: 30px;
+        display: flex;
+        align-items: center;
+    }
+    .info-text {
+        color: #888;
+        font-size: 12px;
+        margin-top: 6px;
+    }
+    .char-counter {
+        text-align: right;
+        color: #888;
+        font-size: 12px;
+        margin-top: 4px;
+    }
+    .char-counter.warning {
+        color: #ffc107;
+    }
+    .char-counter.danger {
+        color: #dc3545;
+    }
+</style>
+
+<div class="create-post-form">
+    <h1 style="margin-bottom: 30px; color: #fff;">📝 Создать пост</h1>
+    
+    {% if messages %}
+    <div style="margin-bottom: 20px;">
+        {% for message in messages %}
+        <div style="padding: 12px 16px; border-radius: 6px; margin-bottom: 10px;
+                    background: {% if message.tags == 'error' %}#dc3545{% elif message.tags == 'success' %}#28a745{% else %}#17a2b8{% endif %}; color: white;">
+            {{ message }}
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+    
+    <form method="post" enctype="multipart/form-data" id="postForm">
+        {% csrf_token %}
+        
+        <div class="form-group">
+            <label for="user_id">User ID (опционально)</label>
+            <input type="number" name="user_id" id="user_id" placeholder="ID пользователя (0 если от админки)">
+            <p class="info-text">Оставьте пустым или 0, если публикуете от имени админки</p>
+        </div>
+        
+        <div class="form-group">
+            <label for="post_text">Текст поста</label>
+            <textarea name="post_text" id="post_text" placeholder="Введите текст объявления...
+
+Audi Q7 Premium Plus 45+
+Year: 2022
+Mileage: 49000 km
+VIN: WA1LJBF79ND017836
+Engine: 2.0 turbo
+Drive: AWD Quattro
+City: Tbilisi
+
+Машина не с аукционов, куплена в салоне США.
+Состояние идеальное, работает как часы.
+
+💵 54000$
+📞 +995555555555 @username"></textarea>
+            <div class="char-counter" id="charCounter">0 / 1024</div>
+            <p class="info-text">Поддерживается HTML разметка: &lt;b&gt;, &lt;i&gt;, &lt;a&gt;, &lt;code&gt;</p>
+        </div>
+        
+        <div class="form-group">
+            <label>Медиафайлы (фото/видео)</label>
+            <div class="file-upload" id="fileUpload">
+                <div class="file-upload-icon">📷</div>
+                <div class="file-upload-text">
+                    Перетащите файлы сюда или нажмите для выбора<br>
+                    <small>JPG, PNG, GIF, MP4, MOV (до 10 файлов)</small>
+                </div>
+                <input type="file" name="media_files" id="mediaFiles" multiple accept="image/*,video/*">
+            </div>
+            <div class="preview-container" id="previewContainer"></div>
+        </div>
+        
+        <div class="buttons-row">
+            <button type="submit" class="submit-btn">🚀 Опубликовать в канал</button>
+            <a href="{% url 'admin:bot_userposts_changelist' %}" class="cancel-btn">Отмена</a>
+        </div>
+    </form>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const fileUpload = document.getElementById('fileUpload');
+    const fileInput = document.getElementById('mediaFiles');
+    const previewContainer = document.getElementById('previewContainer');
+    const postText = document.getElementById('post_text');
+    const charCounter = document.getElementById('charCounter');
+    
+    let selectedFiles = [];
+    
+    // Обновление счётчика символов
+    function updateCharCounter() {
+        const length = postText.value.length;
+        charCounter.textContent = length + ' / 1024';
+        charCounter.className = 'char-counter';
+        if (length > 900) charCounter.classList.add('warning');
+        if (length > 1024) charCounter.classList.add('danger');
+    }
+    
+    postText.addEventListener('input', updateCharCounter);
+    updateCharCounter();
+    
+    // Drag & Drop
+    fileUpload.addEventListener('click', () => fileInput.click());
+    
+    fileUpload.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        fileUpload.classList.add('dragover');
+    });
+    
+    fileUpload.addEventListener('dragleave', () => {
+        fileUpload.classList.remove('dragover');
+    });
+    
+    fileUpload.addEventListener('drop', (e) => {
+        e.preventDefault();
+        fileUpload.classList.remove('dragover');
+        handleFiles(e.dataTransfer.files);
+    });
+    
+    fileInput.addEventListener('change', () => {
+        handleFiles(fileInput.files);
+    });
+    
+    function handleFiles(files) {
+        Array.from(files).forEach(file => {
+            if (selectedFiles.length >= 10) return;
+            selectedFiles.push(file);
+            addPreview(file, selectedFiles.length - 1);
+        });
+        updateFileInput();
+    }
+    
+    function addPreview(file, index) {
+        const div = document.createElement('div');
+        div.className = 'preview-item';
+        div.dataset.index = index;
+        
+        if (file.type.startsWith('image/')) {
+            const img = document.createElement('img');
+            img.src = URL.createObjectURL(file);
+            div.appendChild(img);
+        } else {
+            const icon = document.createElement('div');
+            icon.className = 'file-icon';
+            icon.textContent = '🎬';
+            div.appendChild(icon);
+        }
+        
+        const removeBtn = document.createElement('button');
+        removeBtn.className = 'remove-btn';
+        removeBtn.textContent = '×';
+        removeBtn.type = 'button';
+        removeBtn.onclick = () => {
+            selectedFiles.splice(index, 1);
+            rebuildPreviews();
+            updateFileInput();
+        };
+        div.appendChild(removeBtn);
+        
+        previewContainer.appendChild(div);
+    }
+    
+    function rebuildPreviews() {
+        previewContainer.innerHTML = '';
+        selectedFiles.forEach((file, index) => addPreview(file, index));
+    }
+    
+    function updateFileInput() {
+        const dt = new DataTransfer();
+        selectedFiles.forEach(file => dt.items.add(file));
+        fileInput.files = dt.files;
+    }
+});
+</script>
+{% endblock %}

@@ -68,6 +68,12 @@ class UserPosts(models.Model):
     id = models.AutoField(primary_key=True)
     user_id = models.BigIntegerField(verbose_name='User ID')
     post_id = models.BigIntegerField(verbose_name='Post ID в Telegram')
+    post_message_ids = ArrayField(
+        models.BigIntegerField(),
+        null=True,
+        blank=True,
+        verbose_name='Все Message IDs (для медиагрупп)'
+    )
     post_text = models.TextField(null=True, blank=True, verbose_name='Текст поста')
     post_media_list = ArrayField(
         models.CharField(max_length=500),
@@ -77,7 +83,9 @@ class UserPosts(models.Model):
     )
     
     is_published = models.BooleanField(default=False, verbose_name='Опубликован')
+    is_deleted = models.BooleanField(default=False, verbose_name='Удалён в Telegram')
     date_published = models.DateTimeField(null=True, blank=True, verbose_name='Дата публикации')
+    date_deleted = models.DateTimeField(null=True, blank=True, verbose_name='Дата удаления')
     admin_id = models.BigIntegerField(null=True, blank=True, verbose_name='Admin ID')
     tariff_user = models.CharField(
         max_length=20, 

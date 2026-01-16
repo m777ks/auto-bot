@@ -5,6 +5,7 @@ import limited_aiogram
 from aiogram import Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
+from aiogram.exceptions import TelegramBadRequest
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from sqlalchemy import text
 
@@ -19,6 +20,7 @@ from app.sender import sender
 from app.service.redis_client import redis
 from config_data.config import ConfigEnv, load_config
 from db.database import async_engine
+from db.ORM import PostsORM
 
 # Инициализируем логгер
 logger = logging.getLogger(__name__)
@@ -42,11 +44,58 @@ async def heartbeat():
         await asyncio.sleep(10)
 
 
+async def check_deleted_posts():
+    """
+    Проверяет существуют ли посты в канале.
+    Если пост удалён — помечает его в БД.
+    """
+    logger.info("[CHECK_POSTS] Начинаю проверку постов на удаление...")
+    
+    try:
+        posts = await PostsORM.get_active_posts()
+        logger.info(f"[CHECK_POSTS] Найдено {len(posts)} активных постов для проверки")
+        
+        deleted_ids = []
+        checked = 0
+        
+        for post in posts:
+            try:
+                # Пытаемся получить информацию о сообщении через копирование
+                # (единственный способ проверить существование без отправки)
+                await bot.copy_message(
+                    chat_id=config.tg_bot.admin_ids[0],  # копируем себе
+                    from_chat_id=config.tg_bot.channel_id,
+                    message_id=post.post_id,
+                    disable_notification=True
+                )
+                # Если успешно — удаляем скопированное сообщение
+                # (copy_message возвращает MessageId, нужно удалить)
+                checked += 1
+            except TelegramBadRequest as e:
+                if "message to copy not found" in str(e).lower() or "message not found" in str(e).lower():
+                    # Пост удалён
+                    deleted_ids.append(post.id)
+                    logger.info(f"[CHECK_POSTS] Пост ID={post.id} (TG: {post.post_id}) удалён из канала")
+                else:
+                    logger.warning(f"[CHECK_POSTS] Ошибка проверки поста {post.id}: {e}")
+            except Exception as e:
+                logger.warning(f"[CHECK_POSTS] Неизвестная ошибка для поста {post.id}: {e}")
+            
+            # Небольшая задержка чтобы не спамить API
+            await asyncio.sleep(0.5)
+        
+        # Помечаем удалённые посты
+        if deleted_ids:
+            count = await PostsORM.mark_posts_as_deleted(deleted_ids)
+            logger.info(f"[CHECK_POSTS] Помечено как удалённые: {count} постов")
+        
+        logger.info(f"[CHECK_POSTS] Проверка завершена. Проверено: {checked}, удалено: {len(deleted_ids)}")
+        
+    except Exception as e:
+        logger.error(f"[CHECK_POSTS] Ошибка при проверке постов: {e}")
+
+
 async def main():
-    # await start_http_server()
-    # scheduler.start()
-
-
     # Конфигурируем логирование
     logging.basicConfig(
         level=logging.INFO,
@@ -79,6 +128,17 @@ async def main():
 
     # Запускаем heartbeat в фоне
     asyncio.create_task(heartbeat())
+
+    # Запускаем scheduler для периодической проверки постов
+    scheduler.add_job(
+        check_deleted_posts,
+        'interval',
+        hours=1,  # Проверяем каждые 1 час
+        id='check_deleted_posts',
+        replace_existing=True
+    )
+    scheduler.start()
+    logger.info("Scheduler запущен. Проверка постов каждые 1 час.")
 
     # Пропускаем накопившиеся апдейты и запускаем polling
     await bot.delete_webhook(drop_pending_updates=True)

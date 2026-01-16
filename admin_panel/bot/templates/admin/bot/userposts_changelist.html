@@ -1,0 +1,11 @@
+{% extends "admin/change_list.html" %}
+{% load admin_urls %}
+
+{% block object-tools-items %}
+<li>
+    <a href="/admin/bot/userposts/create-post/" class="addlink" style="background: linear-gradient(135deg, #28a745, #20c997);">
+        📝 Создать пост
+    </a>
+</li>
+{{ block.super }}
+{% endblock %}

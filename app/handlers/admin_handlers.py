@@ -384,6 +384,9 @@ async def admin_publish_post(callback: CallbackQuery, bot: Bot, state: FSMContex
         
         channel_id = config.tg_bot.channel_id
         
+        post_id = 0
+        post_message_ids = []
+        
         if len(media_file_ids) > 1:
             media_group = []
             for i, media in enumerate(media_file_ids):
@@ -394,7 +397,9 @@ async def admin_publish_post(callback: CallbackQuery, bot: Bot, state: FSMContex
                     media_group.append(InputMediaVideo(media=media["file_id"], caption=caption))
             
             sent_messages = await bot.send_media_group(chat_id=channel_id, media=media_group)
-            post_id = sent_messages[0].message_id
+            # Сохраняем ВСЕ message_id для медиагруппы
+            post_message_ids = [msg.message_id for msg in sent_messages]
+            post_id = post_message_ids[0] if post_message_ids else 0
         else:
             media = media_file_ids[0]
             if media["type"] == "photo":
@@ -402,6 +407,7 @@ async def admin_publish_post(callback: CallbackQuery, bot: Bot, state: FSMContex
             else:
                 sent_msg = await bot.send_video(chat_id=channel_id, video=media["file_id"], caption=post_text)
             post_id = sent_msg.message_id
+            post_message_ids = [post_id]
         
         # user_id - пользователь из пересылки, admin_id - кто публиковал
         user_id = data.get("user_id") or admin_id
@@ -409,6 +415,7 @@ async def admin_publish_post(callback: CallbackQuery, bot: Bot, state: FSMContex
         await PostsORM.create_post(
             user_id=user_id,
             post_id=post_id,
+            post_message_ids=post_message_ids,
             post_text=post_text,
             post_media_list=s3_keys,
             admin_id=admin_id

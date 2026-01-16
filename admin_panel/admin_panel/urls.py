@@ -17,12 +17,13 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path
 from .views import healthcheck
-from bot.views import get_presigned_url
+from bot.views import get_presigned_url, create_post
 from django.conf import settings
 from django.conf.urls.static import static
 
 urlpatterns = [
     path('s3-preview/', get_presigned_url, name='s3_preview'),
+    path('admin/bot/userposts/create-post/', create_post, name='admin:create_post'),
     path('admin/', admin.site.urls),
     path("healthcheck/", healthcheck),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

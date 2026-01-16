@@ -57,12 +57,15 @@ class UserPosts(Base):
 
     id = Column(Integer, primary_key=True)
     user_id = Column(BigInteger)
-    post_id = Column(BigInteger)
+    post_id = Column(BigInteger)  # Первый message_id (для совместимости)
+    post_message_ids = Column(ARRAY(BigInteger), nullable=True)  # Все message_id медиагруппы
     post_text = Column(Text, nullable=True)
     post_media_list = Column(ARRAY(String), nullable=True)
 
     is_published = Column(Boolean, default=False)
+    is_deleted = Column(Boolean, default=False)  # Удалён ли пост в Telegram
     date_published = Column(DateTime(timezone=True), nullable=True)
+    date_deleted = Column(DateTime(timezone=True), nullable=True)  # Когда обнаружено удаление
     admin_id = Column(BigInteger, nullable=True)
     tariff_user = Column(Enum(UserTariff), default=UserTariff.free)
     

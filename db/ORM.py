@@ -240,6 +240,7 @@ class PostsORM:
         post_id: int,
         post_text: str = None,
         post_media_list: list[str] = None,
+        post_message_ids: list[int] = None,
         admin_id: int = None,
         tariff_user: UserTariff = UserTariff.free
     ) -> Optional[UserPosts]:
@@ -248,9 +249,10 @@ class PostsORM:
         
         Args:
             user_id: ID пользователя
-            post_id: ID поста в Telegram
+            post_id: ID поста в Telegram (первый message_id)
             post_text: Текст поста
             post_media_list: Список ключей медиа в S3
+            post_message_ids: Все message_id (для медиагрупп)
             admin_id: ID админа, опубликовавшего пост
             tariff_user: Тариф пользователя
             
@@ -262,6 +264,7 @@ class PostsORM:
                 new_post = UserPosts(
                     user_id=user_id,
                     post_id=post_id,
+                    post_message_ids=post_message_ids,
                     post_text=post_text,
                     post_media_list=post_media_list,
                     is_published=True,
@@ -302,4 +305,66 @@ class PostsORM:
             except Exception as e:
                 logger.error(f"[DB] Ошибка при получении постов пользователя {user_id}: {e}")
                 return []
+    
+    @staticmethod
+    async def get_active_posts() -> list[UserPosts]:
+        """Получает все активные (не удалённые) опубликованные посты"""
+        async with session_factory_async() as session:
+            try:
+                query = select(UserPosts).filter(
+                    UserPosts.is_published == True,
+                    UserPosts.is_deleted == False
+                ).order_by(UserPosts.date_published.desc())
+                result = await session.execute(query)
+                return result.scalars().all()
+            except Exception as e:
+                logger.error(f"[DB] Ошибка при получении активных постов: {e}")
+                return []
+    
+    @staticmethod
+    async def mark_as_deleted(post_db_id: int) -> bool:
+        """Помечает пост как удалённый в Telegram"""
+        async with session_factory_async() as session:
+            try:
+                query = (
+                    update(UserPosts)
+                    .where(UserPosts.id == post_db_id)
+                    .values(
+                        is_deleted=True,
+                        date_deleted=datetime.now(timezone.utc)
+                    )
+                )
+                await session.execute(query)
+                await session.commit()
+                logger.info(f"[DB] Пост ID={post_db_id} помечен как удалённый")
+                return True
+            except Exception as e:
+                await session.rollback()
+                logger.error(f"[DB] Ошибка при пометке поста {post_db_id} как удалённого: {e}")
+                return False
+    
+    @staticmethod
+    async def mark_posts_as_deleted(post_db_ids: list[int]) -> int:
+        """Помечает несколько постов как удалённые. Возвращает количество обновлённых."""
+        if not post_db_ids:
+            return 0
+        async with session_factory_async() as session:
+            try:
+                query = (
+                    update(UserPosts)
+                    .where(UserPosts.id.in_(post_db_ids))
+                    .values(
+                        is_deleted=True,
+                        date_deleted=datetime.now(timezone.utc)
+                    )
+                )
+                result = await session.execute(query)
+                await session.commit()
+                count = result.rowcount
+                logger.info(f"[DB] Помечено как удалённые: {count} постов")
+                return count
+            except Exception as e:
+                await session.rollback()
+                logger.error(f"[DB] Ошибка при пометке постов как удалённых: {e}")
+                return 0
 
