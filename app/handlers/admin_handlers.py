@@ -62,12 +62,29 @@ async def moderate_channel_messages(message: Message, bot: Bot):
     if message.sender_chat and message.sender_chat.id == CHANNEL_ID:
         return
     
+    # Проверяем, является ли сообщение системным (вход/выход/и т.д.)
+    is_service_message = any([
+        message.new_chat_members,
+        message.left_chat_member,
+        message.new_chat_title,
+        message.new_chat_photo,
+        message.delete_chat_photo,
+        message.pinned_message,
+        message.video_chat_started,
+        message.video_chat_ended,
+        message.video_chat_participants_invited,
+    ])
+    
     user_id = message.from_user.id if message.from_user else 0
     
     try:
-        # Удаляем сообщение пользователя
+        # Удаляем сообщение
         await message.delete()
-        logger.info(f"[CHANNEL_MOD] Удалено сообщение от user_id={user_id}")
+        logger.info(f"[CHANNEL_MOD] Удалено сообщение от user_id={user_id}, service={is_service_message}")
+        
+        # Для системных сообщений не шлём уведомление
+        if is_service_message:
+            return
         
         # Отправляем уведомление с дедупликацией через Redis
         from app.service.redis_client import redis
