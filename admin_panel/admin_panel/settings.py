@@ -8,7 +8,7 @@ from config_data.config import ConfigEnv, load_config
 
 config: ConfigEnv = load_config()
 
-MEDIA_URL = '/media/'
+MEDIA_URL = '/auto/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
 
@@ -31,7 +31,9 @@ ALLOWED_HOSTS = [
 
 CSRF_TRUSTED_ORIGINS = [
     'https://panda-music-dev.way2ar.com',
-    'https://bot.redfinchsoundgame.ru'
+    'https://bot.redfinchsoundgame.ru',
+    'http://146.103.96.123',
+    'https://146.103.96.123',
 ]
 
 # Application definition
@@ -137,7 +139,9 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
-STATIC_URL = 'static/'
+# Префикс для работы через nginx location /auto/
+FORCE_SCRIPT_NAME = '/auto'
+STATIC_URL = '/auto/static/'
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
