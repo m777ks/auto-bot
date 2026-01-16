@@ -20,7 +20,7 @@ LEXICON: dict[str, str] = {
 • Цена
 
 <i>Пример описания:</i>
-Audi Q7 Premium Plus, 2022 год, пробег 49000 км, VIN: WA1LJBF79ND017836, 2.0 turbo, AWD, Тбилиси, +995593470549 @Andreks, 54000$''',
+Audi Q7 Premium Plus, 2022 год, пробег 49000 км, VIN: WA1LJBF234417836, 2.0 turbo, AWD, Тбилиси, +995987654321 @username, 54000$''',
 
     'form_post_en': '''📝 <b>To place an ad, send:</b>
 
@@ -39,7 +39,7 @@ Include in the description:
 • Price
 
 <i>Example:</i>
-Audi Q7 Premium Plus, 2022, mileage 49000 km, VIN: WA1LJBF79ND017836, 2.0 turbo, AWD, Tbilisi, +995593470549 @Andreks, 54000$''',
+Audi Q7 Premium Plus, 2022, mileage 49000 km, VIN: WA1LJBF3247836, 2.0 turbo, AWD, Tbilisi, +995987654321 @username, 54000$''',
 
     'form_post_ge': '''📝 <b>განცხადების განსათავსებლად გამოაგზავნეთ:</b>
 

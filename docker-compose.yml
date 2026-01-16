@@ -1,15 +1,16 @@
-name: auto-bot
+name: auto-bot-gpt
 
 
 services:
   db:
     image: postgres:15
+    container_name: auto-bot-gpt-db
     env_file:
       - .env
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
-      - "127.0.0.1:5432:5432"
+      - "127.0.0.1:5433:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 5s
@@ -18,11 +19,12 @@ services:
 
   redis:
     image: redis:7
+    container_name: auto-bot-gpt-redis
     entrypoint: redis-server --requirepass ${REDIS_PASSWORD}
     env_file:
       - .env
     ports:
-      - "127.0.0.1:6379:6379"
+      - "127.0.0.1:6380:6379"
     volumes:
       - redis_data:/data
 
@@ -30,6 +32,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    container_name: auto-bot-gpt-bot
     entrypoint: ["./start.sh", "bot"]
     env_file:
       - .env
@@ -45,6 +48,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    container_name: auto-bot-gpt-admin
     entrypoint: ["./start.sh", "admin_panel"]
     env_file:
       - .env
@@ -53,7 +57,7 @@ services:
     volumes:
       - media:/app/media
     ports:
-      - "127.0.0.1:8000:8000"
+      - "127.0.0.1:8001:8000"
     depends_on:
       - db
       - redis
