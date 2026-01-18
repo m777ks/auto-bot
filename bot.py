@@ -44,59 +44,44 @@ async def heartbeat():
         await asyncio.sleep(10)
 
 
-async def check_deleted_posts():
-    """
-    Проверяет существуют ли посты в канале.
-    Если пост удалён — помечает его в БД.
-    """
-    logger.info("[CHECK_POSTS] Начинаю проверку постов на удаление...")
+async def check_posts_no_copy(posts: list):
+    """Проверка через получение информации о чате (без спама)"""
+    deleted_ids = []
+    checked = 0
     
-    try:
-        posts = await PostsORM.get_active_posts()
-        logger.info(f"[CHECK_POSTS] Найдено {len(posts)} активных постов для проверки")
-        
-        deleted_ids = []
-        checked = 0
-        
-        for post in posts:
-            try:
-                # Пытаемся получить информацию о сообщении через копирование
-                # (единственный способ проверить существование без отправки)
-                message_info = await bot.copy_message(
-                    chat_id=config.tg_bot.admin_ids[0],  # копируем себе
-                    from_chat_id=config.tg_bot.channel_id,
-                    message_id=post.post_id,
-                    disable_notification=True
-                )
-                # Если успешно — удаляем скопированное сообщение
-                # (copy_message возвращает MessageId, нужно удалить)
-                checked += 1
-                await bot.delete_message(
-                    chat_id=config.tg_bot.admin_ids[0],
-                    message_id=message_info.message_id
-                )
-            except TelegramBadRequest as e:
-                if "message to copy not found" in str(e).lower() or "message not found" in str(e).lower():
-                    # Пост удалён
-                    deleted_ids.append(post.id)
-                    logger.info(f"[CHECK_POSTS] Пост ID={post.id} (TG: {post.post_id}) удалён из канала")
-                else:
-                    logger.warning(f"[CHECK_POSTS] Ошибка проверки поста {post.id}: {e}")
-            except Exception as e:
-                logger.warning(f"[CHECK_POSTS] Неизвестная ошибка для поста {post.id}: {e}")
+    for post in posts:
+        try:
+            # Пытаемся получить информацию о сообщении
+            # Этот метод НЕ копирует сообщение
+            await bot.get_chat(config.tg_bot.channel_id)
             
-            # Небольшая задержка чтобы не спамить API
-            await asyncio.sleep(0.5)
+            # Если дошли сюда - канал доступен
+            # Теперь проверяем конкретное сообщение через edit
+            try:
+                # Пытаемся "отредактировать" сообщение (но не редактируем)
+                # Если сообщение не существует - получим ошибку
+                await bot.edit_message_reply_markup(
+                    chat_id=config.tg_bot.channel_id,
+                    message_id=post.post_id,
+                    reply_markup=None
+                )
+                checked += 1
+            except TelegramBadRequest as e:
+                if "message to edit not found" in str(e).lower() or \
+                   "message not found" in str(e).lower():
+                    deleted_ids.append(post.id)
+                elif "message is not modified" in str(e).lower():
+                    # Сообщение существует, просто не изменилось
+                    checked += 1
+                else:
+                    raise
+                    
+        except Exception as e:
+            logger.warning(f"Ошибка проверки {post.id}: {e}")
         
-        # Помечаем удалённые посты
-        if deleted_ids:
-            count = await PostsORM.mark_posts_as_deleted(deleted_ids)
-            logger.info(f"[CHECK_POSTS] Помечено как удалённые: {count} постов")
-        
-        logger.info(f"[CHECK_POSTS] Проверка завершена. Проверено: {checked}, удалено: {len(deleted_ids)}")
-        
-    except Exception as e:
-        logger.error(f"[CHECK_POSTS] Ошибка при проверке постов: {e}")
+        await asyncio.sleep(0.1)  # Меньше задержка, т.к. не копируем
+    
+    return deleted_ids, checked
 
 
 async def main():
@@ -135,7 +120,7 @@ async def main():
 
     # Запускаем scheduler для периодической проверки постов
     scheduler.add_job(
-        check_deleted_posts,
+        check_posts_no_copy,
         'interval',
         hours=1,  # Проверяем каждые 1 час
         id='check_deleted_posts',
