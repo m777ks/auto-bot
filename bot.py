@@ -62,7 +62,7 @@ async def check_deleted_posts():
             try:
                 # Пытаемся получить информацию о сообщении через копирование
                 # (единственный способ проверить существование без отправки)
-                await bot.copy_message(
+                message_id = await bot.copy_message(
                     chat_id=config.tg_bot.admin_ids[0],  # копируем себе
                     from_chat_id=config.tg_bot.channel_id,
                     message_id=post.post_id,
@@ -71,6 +71,10 @@ async def check_deleted_posts():
                 # Если успешно — удаляем скопированное сообщение
                 # (copy_message возвращает MessageId, нужно удалить)
                 checked += 1
+                await bot.delete_message(
+                    chat_id=config.tg_bot.admin_ids[0],
+                    message_id=message_id
+                )
             except TelegramBadRequest as e:
                 if "message to copy not found" in str(e).lower() or "message not found" in str(e).lower():
                     # Пост удалён
