@@ -44,6 +44,62 @@ class AdminPostStates(StatesGroup):
 
 # ==================== МОДЕРАЦИЯ КАНАЛА ====================
 
+@router.message(F.chat.id == CHANNEL_ID, F.media_group_id)
+async def moderate_channel_media_group(message: Message, bot: Bot, album: list[Message] = None):
+    """Модерация медиагрупп в канале - удаление всех фото альбома"""
+    
+    user_id = message.from_user.id if message.from_user else 0
+    user_name = message.from_user.username if message.from_user else "Unknown"
+    
+    logger.info(f"[CHANNEL_MOD] Медиагруппа от {user_id}:{user_name}")
+    
+    # Не удаляем сообщения от бота
+    if message.from_user and message.from_user.is_bot:
+        return
+    
+    # Не удаляем сообщения от админов
+    if message.from_user and message.from_user.id in ADMIN_IDS:
+        return
+    
+    # Не удаляем посты канала (от имени канала)
+    if message.sender_chat and message.sender_chat.id == CHANNEL_ID:
+        return
+    
+    try:
+        # Собираем все message_id из альбома
+        if album:
+            message_ids_all = [msg.message_id for msg in album]
+        else:
+            message_ids_all = [message.message_id]
+        
+        # Удаляем все сообщения медиагруппы
+        await bot.delete_messages(chat_id=CHANNEL_ID, message_ids=message_ids_all)
+        logger.info(f"[CHANNEL_MOD] Удалено {len(message_ids_all)} сообщений медиагруппы от {user_id}")
+        
+        # Отправляем уведомление с дедупликацией через Redis
+        from app.service.redis_client import redis
+        
+        key = f"channel_warning:{user_id}"
+        is_warned = await redis.get(key)
+        
+        if not is_warned:
+            warning_msg = await bot.send_message(
+                chat_id=CHANNEL_ID,
+                text=f"📢 Для размещения объявлений пишите боту @{BOT_USERNAME}",
+                disable_notification=True
+            )
+            await redis.set(key, "1", ex=25)
+            
+            await asyncio.sleep(20)
+            try:
+                await warning_msg.delete()
+            except Exception:
+                pass
+        
+    except Exception as e:
+        logger.warning(f"[CHANNEL_MOD] Ошибка модерации медиагруппы: {e}")
+
+
 @router.message(F.chat.id == CHANNEL_ID)
 async def moderate_channel_messages(message: Message, bot: Bot):
     """Модерация сообщений в канале - удаление и уведомление"""
