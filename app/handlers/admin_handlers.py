@@ -241,7 +241,11 @@ async def admin_cancel_command(message: Message, state: FSMContext):
         await message.answer("Нет активного действия для отмены.")
 
 
-@router.message(F.chat.type == "private", F.from_user.id.in_(ADMIN_IDS))
+@router.message(
+    F.chat.type == "private", 
+    F.from_user.id.in_(ADMIN_IDS),
+    ~StateFilter(AdminPostStates.waiting_for_manual_text, AdminPostStates.waiting_for_gpt_correction)
+)
 async def process_admin_media(message: Message, bot: Bot, state: FSMContext, album: list[Message] = None):
     """Обработка медиа от админа для создания поста"""
     
@@ -257,10 +261,6 @@ async def process_admin_media(message: Message, bot: Bot, state: FSMContext, alb
         else:
             # Это текст - пусть обрабатывает другой хендлер
             return
-    elif current_state is not None:
-        # Другие состояния - пропускаем
-        logger.info(f"[ADMIN_MEDIA] Пропуск: есть активное состояние {current_state}")
-        return
     
     # DEBUG: Логируем что пришло
     logger.info(f"[ADMIN_MEDIA] album={album is not None}, photo={message.photo is not None}, video={message.video is not None}")
