@@ -12,6 +12,7 @@ from aiogram import Router, F, Bot
 from aiogram.filters import StateFilter
 from aiogram.types import Message, CallbackQuery, InputMediaPhoto, InputMediaVideo, InputMediaDocument, InputMediaAudio
 from aiogram.fsm.state import StatesGroup, State
+from aiogram.dispatcher.event.handler import SkipHandler
 
 from app.service.openai_service import generate_post_text
 from app.keybords.keybords import kb_admin_post_actions, kb_admin_cancel
@@ -259,8 +260,9 @@ async def process_admin_media(message: Message, bot: Bot, state: FSMContext, alb
             logger.info("[ADMIN_MEDIA] Обновляем медиа в состоянии waiting_for_text")
             # Продолжаем обработку - заменим pending_media
         else:
-            # Это текст - пусть обрабатывает другой хендлер
-            return
+            # Это текст - передаём управление process_pending_text
+            logger.info("[ADMIN_MEDIA] Пропускаем текст -> process_pending_text")
+            raise SkipHandler()
     
     # DEBUG: Логируем что пришло
     logger.info(f"[ADMIN_MEDIA] album={album is not None}, photo={message.photo is not None}, video={message.video is not None}")
@@ -386,6 +388,8 @@ async def process_admin_media(message: Message, bot: Bot, state: FSMContext, alb
 @router.message(F.chat.type == "private", AdminPostStates.waiting_for_text)
 async def process_pending_text(message: Message, bot: Bot, state: FSMContext):
     """Получение текста после того как медиа уже загружено"""
+    
+    logger.info(f"[PENDING_TEXT] Получен текст от {message.from_user.id}: {message.text[:50] if message.text else 'None'}...")
     
     # Получаем текст из сообщения
     original_text = message.text or message.caption or ""
