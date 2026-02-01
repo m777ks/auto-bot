@@ -12,7 +12,7 @@ from datetime import datetime
 from aiogram.fsm.context import FSMContext
 from aiogram import Router, F, Bot
 from aiogram.filters import Command
-from aiogram.types import Message, CallbackQuery
+from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 
 from app.service.functions import check_throttle
 from app.service.redis_client import redis
@@ -140,13 +140,19 @@ async def process_user_message(message: Message, bot: Bot, album: list[Message] 
                             thread_id=forum_topic.message_thread_id
                         )
                         
+                        # Кнопка с ссылкой на профиль
+                        profile_kb = InlineKeyboardMarkup(inline_keyboard=[
+                            [InlineKeyboardButton(text="👤 Профиль", url=f"tg://user?id={user_id}")]
+                        ])
+                        
                         await bot.send_message(
                             chat_id=TG_MESSAGE_GROUP_ID,
                             message_thread_id=thread.thread_id,
                             text=f"🆕 Новое обращение от пользователя:\n"
                                  f"👤 Username: @{user_name}\n"
                                  f"🆔 User ID: {user_id}\n"
-                                 f"📅 Время: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+                                 f"📅 Время: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+                            reply_markup=profile_kb
                         )
                 finally:
                     await redis.delete(lock_key)
