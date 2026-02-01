@@ -12,7 +12,6 @@ from aiogram import Router, F, Bot
 from aiogram.filters import StateFilter
 from aiogram.types import Message, CallbackQuery, InputMediaPhoto, InputMediaVideo, InputMediaDocument, InputMediaAudio
 from aiogram.fsm.state import StatesGroup, State
-from aiogram.dispatcher.event.handler import SkipHandler
 
 from app.service.openai_service import generate_post_text
 from app.keybords.keybords import kb_admin_post_actions, kb_admin_cancel
@@ -231,6 +230,34 @@ def extract_sender_info(message: Message) -> str | None:
 
 from aiogram.filters import Command
 
+
+@router.message(
+    F.chat.type == "private",
+    F.from_user.id.in_(ADMIN_IDS),
+    F.text,
+    StateFilter(None)  # Только без активного состояния
+)
+async def process_admin_text_before_media(message: Message, state: FSMContext):
+    """Сохранение текста от админа перед отправкой медиа (для пересланных постов)"""
+    
+    # Пропускаем команды
+    if message.text.startswith('/'):
+        return
+    
+    # Проверяем, возможно это пересланный пост с текстом
+    if message.forward_origin:
+        forward_user_id = extract_forward_user_id(message)
+        sender_info = extract_sender_info(message)
+        await state.update_data(
+            pending_text=message.text,
+            forward_user_id=forward_user_id,
+            sender_info=sender_info
+        )
+        await message.answer("📝 Текст сохранён. Теперь пришли медиа (фото/видео) для объявления.")
+    else:
+        await message.answer("📷 Пришли медиа (фото/видео) с описанием для создания объявления.")
+
+
 @router.message(Command("cancel"), F.chat.type == "private", F.from_user.id.in_(ADMIN_IDS))
 async def admin_cancel_command(message: Message, state: FSMContext):
     """Отмена текущего действия"""
@@ -245,6 +272,7 @@ async def admin_cancel_command(message: Message, state: FSMContext):
 @router.message(
     F.chat.type == "private", 
     F.from_user.id.in_(ADMIN_IDS),
+    (F.photo | F.video | F.media_group_id),  # Только медиа
     ~StateFilter(AdminPostStates.waiting_for_manual_text, AdminPostStates.waiting_for_gpt_correction)
 )
 async def process_admin_media(message: Message, bot: Bot, state: FSMContext, album: list[Message] = None):
@@ -254,42 +282,12 @@ async def process_admin_media(message: Message, bot: Bot, state: FSMContext, alb
     current_state = await state.get_state()
     logger.info(f"[ADMIN_MEDIA] ВХОД: state={current_state}, album={album is not None}, photo={message.photo is not None}")
     
-    # Если приходит новое медиа в состоянии ожидания текста - обновляем медиа
-    if current_state == AdminPostStates.waiting_for_text:
-        if album or message.photo or message.video:
-            logger.info("[ADMIN_MEDIA] Обновляем медиа в состоянии waiting_for_text")
-            # Продолжаем обработку - заменим pending_media
-        else:
-            # Это текст - передаём управление process_pending_text
-            logger.info("[ADMIN_MEDIA] Пропускаем текст -> process_pending_text")
-            raise SkipHandler()
-    
     # DEBUG: Логируем что пришло
     logger.info(f"[ADMIN_MEDIA] album={album is not None}, photo={message.photo is not None}, video={message.video is not None}")
     logger.info(f"[ADMIN_MEDIA] caption={message.caption}, text={message.text}")
     if album:
         for i, msg in enumerate(album):
             logger.info(f"[ADMIN_MEDIA] album[{i}]: caption={msg.caption}, text={msg.text}, forward={msg.forward_origin}")
-    
-    # Проверяем есть ли медиа (в альбоме или одиночное)
-    has_media = album or message.photo or message.video
-    
-    if not has_media:
-        # Если это текст без медиа и не команда - сохраняем как описание для следующего медиа
-        if message.text and not message.text.startswith('/'):
-            # Проверяем, возможно это пересланный пост с текстом
-            if message.forward_origin:
-                forward_user_id = extract_forward_user_id(message)
-                sender_info = extract_sender_info(message)
-                await state.update_data(
-                    pending_text=message.text, 
-                    forward_user_id=forward_user_id,
-                    sender_info=sender_info
-                )
-                await message.answer("📝 Текст сохранён. Теперь пришли медиа (фото/видео) для объявления.")
-            else:
-                await message.answer("📷 Пришли медиа (фото/видео) с описанием для создания объявления")
-        return
     
     await message.answer("⏳ Обрабатываю объявление...")
     
