@@ -30,8 +30,7 @@ ALLOWED_HOSTS = [
 ]
 
 CSRF_TRUSTED_ORIGINS = [
-    'https://panda-music-dev.way2ar.com',
-    'https://bot.redfinchsoundgame.ru',
+    'https://auto-georgian.m777ks.com',
     'http://146.103.96.123',
     'http://146.103.96.123:8081',
     'https://146.103.96.123',
